@@ -18,10 +18,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Variable untuk melacak status sidebar
     let sidebarLocked = false;
-    let touchStartY = 0;
-    let touchStartX = 0;
-    let isScrolling = false;
-    let isTouching = false;
+    let preventClose = false;
 
     // Fungsi untuk reset semua classes dan styles
     function resetSidebarStates() {
@@ -30,6 +27,9 @@ document.addEventListener('DOMContentLoaded', function () {
         // Reset inline styles jika ada
         sidebar.style.transform = '';
         document.body.style.overflow = '';
+        document.body.style.position = '';
+        document.body.style.width = '';
+        document.body.style.height = '';
     }
 
     // Fungsi untuk setup desktop layout
@@ -39,6 +39,7 @@ document.addEventListener('DOMContentLoaded', function () {
         mainContent.classList.remove('expanded');
         sidebar.classList.remove('collapsed');
         sidebarLocked = false;
+        preventClose = false;
     }
 
     // Fungsi untuk setup mobile layout
@@ -48,6 +49,7 @@ document.addEventListener('DOMContentLoaded', function () {
         sidebar.classList.add('collapsed');
         mainContent.classList.add('expanded');
         sidebarLocked = false;
+        preventClose = false;
     }
 
     // Fungsi untuk membuka sidebar
@@ -57,17 +59,31 @@ document.addEventListener('DOMContentLoaded', function () {
             sidebar.classList.remove('collapsed');
             sidebar.classList.add('mobile-open');
             overlay.classList.add('show');
-            sidebarLocked = true; // Lock sidebar saat terbuka di mobile
-            // Prevent body scroll when sidebar is open
+            sidebarLocked = true;
+            preventClose = true;
+            
+            // Prevent body scroll when sidebar is open - PERBAIKAN UTAMA
             document.body.style.overflow = 'hidden';
             document.body.style.position = 'fixed';
             document.body.style.width = '100%';
             document.body.style.height = '100%';
+            document.body.style.top = '0';
+            document.body.style.left = '0';
+            
+            // Pastikan sidebar full height dan scrollable
+            sidebar.style.height = '100vh';
+            sidebar.style.overflowY = 'auto';
+            sidebar.style.position = 'fixed';
+            sidebar.style.top = '0';
+            sidebar.style.left = '0';
+            sidebar.style.zIndex = '1000';
+            
         } else {
             // Desktop: hilangkan collapsed class
             sidebar.classList.remove('collapsed');
             mainContent.classList.remove('expanded');
             sidebarLocked = false;
+            preventClose = false;
         }
     }
 
@@ -79,16 +95,30 @@ document.addEventListener('DOMContentLoaded', function () {
             sidebar.classList.remove('mobile-open');
             overlay.classList.remove('show');
             sidebarLocked = false;
+            preventClose = false;
+            
             // Restore body scroll
             document.body.style.overflow = '';
             document.body.style.position = '';
             document.body.style.width = '';
             document.body.style.height = '';
+            document.body.style.top = '';
+            document.body.style.left = '';
+            
+            // Reset sidebar styles
+            sidebar.style.height = '';
+            sidebar.style.overflowY = '';
+            sidebar.style.position = '';
+            sidebar.style.top = '';
+            sidebar.style.left = '';
+            sidebar.style.zIndex = '';
+            
         } else {
             // Desktop: collapse sidebar dan expand main content
             sidebar.classList.add('collapsed');
             mainContent.classList.add('expanded');
             sidebarLocked = false;
+            preventClose = false;
         }
     }
 
@@ -111,11 +141,6 @@ document.addEventListener('DOMContentLoaded', function () {
         } else {
             // Switching to desktop
             setupDesktopLayout();
-            // Restore body scroll when switching to desktop
-            document.body.style.overflow = '';
-            document.body.style.position = '';
-            document.body.style.width = '';
-            document.body.style.height = '';
         }
         
         console.log(`Layout switched to: ${currentWidth <= 768 ? 'Mobile' : 'Desktop'} (${currentWidth}px)`);
@@ -146,94 +171,59 @@ document.addEventListener('DOMContentLoaded', function () {
         closeSidebar();
     });
 
-    // Prevent sidebar close on sidebar click/touch
+    // Prevent sidebar close pada semua events di dalam sidebar
     sidebar.addEventListener('click', function (e) {
         e.stopPropagation();
+        preventClose = true;
+        setTimeout(() => {
+            preventClose = false;
+        }, 100);
     });
 
-    // Handle touch events untuk mencegah sidebar tertutup saat scroll
+    // Prevent semua touch events di sidebar dari mempengaruhi document
     sidebar.addEventListener('touchstart', function (e) {
-        touchStartY = e.touches[0].clientY;
-        touchStartX = e.touches[0].clientX;
-        isScrolling = false;
-        isTouching = true;
         e.stopPropagation();
+        preventClose = true;
     }, { passive: true });
 
     sidebar.addEventListener('touchmove', function (e) {
-        if (!touchStartY || !isTouching) return;
-        
-        const touchY = e.touches[0].clientY;
-        const touchX = e.touches[0].clientX;
-        const diffY = Math.abs(touchY - touchStartY);
-        const diffX = Math.abs(touchX - touchStartX);
-        
-        // Jika gerakan lebih vertikal (scroll), tandai sebagai scrolling
-        if (diffY > 10 && diffY > diffX) {
-            isScrolling = true;
-        }
-        
         e.stopPropagation();
+        preventClose = true;
     }, { passive: true });
 
     sidebar.addEventListener('touchend', function (e) {
-        touchStartY = 0;
-        touchStartX = 0;
-        isTouching = false;
-        
-        // Reset isScrolling setelah delay
-        setTimeout(() => {
-            isScrolling = false;
-        }, 200);
-        
         e.stopPropagation();
+        setTimeout(() => {
+            preventClose = false;
+        }, 200);
     }, { passive: true });
 
-    // Prevent scroll pada sidebar dari mempengaruhi document
+    // Prevent scroll events di sidebar
     sidebar.addEventListener('scroll', function (e) {
         e.stopPropagation();
+        preventClose = true;
+        setTimeout(() => {
+            preventClose = false;
+        }, 100);
     }, { passive: true });
 
-    // Handle window resize - PERBAIKAN UTAMA
+    // Handle window resize
     let resizeTimeout;
     window.addEventListener('resize', function () {
-        // Debounce resize event untuk performa
         clearTimeout(resizeTimeout);
         resizeTimeout = setTimeout(() => {
             handleResponsiveLayout();
         }, 100);
     });
 
-    // Handle click outside sidebar untuk mobile
+    // Handle click outside sidebar - HANYA untuk area yang bukan sidebar
     document.addEventListener('click', function (e) {
-        // Hanya jalankan jika di mobile dan sidebar terbuka
-        if (window.innerWidth <= 768 && isSidebarOpen()) {
-            // Jika click di luar sidebar dan bukan di toggle button
+        if (window.innerWidth <= 768 && isSidebarOpen() && !preventClose) {
             if (!sidebar.contains(e.target) && !toggleBtn.contains(e.target)) {
-                // Pastikan tidak sedang scrolling
-                if (!isScrolling && !isTouching) {
-                    closeSidebar();
-                }
+                closeSidebar();
             }
         }
     });
-
-    // Handle touch outside sidebar untuk mobile
-    document.addEventListener('touchstart', function (e) {
-        // Hanya jalankan jika di mobile dan sidebar terbuka
-        if (window.innerWidth <= 768 && isSidebarOpen()) {
-            // Jika touch di luar sidebar dan bukan di toggle button
-            if (!sidebar.contains(e.target) && !toggleBtn.contains(e.target)) {
-                // Pastikan tidak sedang scrolling
-                if (!isScrolling && !isTouching) {
-                    closeSidebar();
-                }
-            }
-        }
-    }, { passive: true });
-
-    // HAPUS event listener scroll yang menyebabkan sidebar tertutup
-    // Jangan tambahkan window scroll listener yang menutup sidebar
 
     // Handle escape key
     document.addEventListener('keydown', function (e) {
@@ -242,18 +232,8 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
-    // Prevent default touch behaviors yang bisa mengganggu
-    sidebar.addEventListener('touchstart', function(e) {
-        e.stopPropagation();
-    }, { passive: true });
-
-    sidebar.addEventListener('touchmove', function(e) {
-        e.stopPropagation();
-    }, { passive: true });
-
-    sidebar.addEventListener('touchend', function(e) {
-        e.stopPropagation();
-    }, { passive: true });
+    // HAPUS SEMUA EVENT LISTENER SCROLL YANG BISA MENUTUP SIDEBAR
+    // Tidak ada window scroll listener yang menutup sidebar
 
     // Handle orientationchange untuk mobile
     window.addEventListener('orientationchange', function() {
@@ -281,6 +261,7 @@ function debugSidebar() {
     
     console.log('=== SIDEBAR DEBUG INFO ===');
     console.log('Window width:', window.innerWidth);
+    console.log('Window height:', window.innerHeight);
     console.log('Device type:', window.innerWidth <= 768 ? 'Mobile' : 'Desktop');
     console.log('Sidebar classes:', sidebar ? sidebar.className : 'null');
     console.log('Main content classes:', mainContent ? mainContent.className : 'null');
@@ -289,36 +270,15 @@ function debugSidebar() {
     console.log('Body position:', document.body.style.position);
     
     if (sidebar) {
-        console.log('Sidebar computed transform:', window.getComputedStyle(sidebar).transform);
         console.log('Sidebar height:', sidebar.offsetHeight);
         console.log('Sidebar scroll height:', sidebar.scrollHeight);
+        console.log('Sidebar style height:', sidebar.style.height);
+        console.log('Sidebar computed transform:', window.getComputedStyle(sidebar).transform);
     }
 }
 
-// Fungsi untuk force close sidebar (untuk debugging)
-function forceCloseSidebar() {
-    const sidebar = document.getElementById('sidebar');
-    const overlay = document.getElementById('overlay');
-    
-    if (sidebar) {
-        sidebar.classList.add('collapsed');
-        sidebar.classList.remove('mobile-open');
-    }
-    
-    if (overlay) {
-        overlay.classList.remove('show');
-    }
-    
-    document.body.style.overflow = '';
-    document.body.style.position = '';
-    document.body.style.width = '';
-    document.body.style.height = '';
-    
-    console.log('Sidebar force closed');
-}
-
-// Fungsi untuk force open sidebar (untuk debugging)
-function forceOpenSidebar() {
+// Fungsi untuk memaksa sidebar tetap terbuka (untuk debugging)
+function lockSidebar() {
     const sidebar = document.getElementById('sidebar');
     const overlay = document.getElementById('overlay');
     
@@ -326,6 +286,12 @@ function forceOpenSidebar() {
         if (sidebar) {
             sidebar.classList.remove('collapsed');
             sidebar.classList.add('mobile-open');
+            sidebar.style.height = '100vh';
+            sidebar.style.position = 'fixed';
+            sidebar.style.top = '0';
+            sidebar.style.left = '0';
+            sidebar.style.zIndex = '1000';
+            sidebar.style.overflowY = 'auto';
         }
         
         if (overlay) {
@@ -338,5 +304,5 @@ function forceOpenSidebar() {
         document.body.style.height = '100%';
     }
     
-    console.log('Sidebar force opened');
+    console.log('Sidebar locked open');
 }
